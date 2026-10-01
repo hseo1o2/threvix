@@ -58,6 +58,7 @@ export default function Page() {
   const [connectedTools, setConnectedTools] = useState<string[]>(['Slack'])
   const [projectId, setProjectId] = useState<string | null>(null)
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [pickerError, setPickerError] = useState<string | null>(null)
   const getSupabase = () => createClient()
 
   useEffect(() => {
@@ -77,13 +78,14 @@ export default function Page() {
   }, [])
 
   async function syncGoogleDoc() {
-    if (!projectId) return
+    setPickerError(null)
+    if (!projectId) { setPickerError('프로젝트를 불러오는 중입니다. 잠시 후 다시 시도해주세요.'); return }
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_PICKER_API_KEY
     const appId = process.env.NEXT_PUBLIC_GOOGLE_CLOUD_PROJECT_NUMBER
-    if (!apiKey || !appId) return
+    if (!apiKey || !appId) { setPickerError('Google Picker 설정이 없습니다. API key와 Cloud project number를 확인해주세요.'); return }
     const tokenResponse = await fetch('/api/google/picker-token')
-    const tokenPayload = await tokenResponse.json()
-    if (!tokenResponse.ok || !tokenPayload.accessToken) return
+    const tokenPayload = await tokenResponse.json().catch(() => ({}))
+    if (!tokenResponse.ok || !tokenPayload.accessToken) { setPickerError(tokenPayload.error ?? 'Google 계정을 먼저 연결해주세요.'); return }
     const loadPicker = () => new Promise<void>((resolve, reject) => {
       if (window.google?.picker) return resolve()
       const script = document.createElement('script')
@@ -97,10 +99,12 @@ export default function Page() {
       const view = new window.google.picker.DocsView(window.google.picker.ViewId.DOCUMENTS).setMimeTypes('application/vnd.google-apps.document').setSelectFolderEnabled(false)
       const picker = new window.google.picker.PickerBuilder().setAppId(appId).setDeveloperKey(apiKey).setOAuthToken(tokenPayload.accessToken).addView(view).enableFeature(window.google.picker.Feature.NAV_HIDDEN).setCallback(async (data: { action: string; docs?: Array<{ id: string }> }) => {
         if (data.action !== window.google.picker.Action.PICKED || !data.docs?.[0]?.id) return
-        await fetch('/api/google/docs/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId, documentId: data.docs[0].id }) })
+        const syncResponse = await fetch('/api/google/docs/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId, documentId: data.docs[0].id }) })
+        if (!syncResponse.ok) { const payload = await syncResponse.json().catch(() => ({})); setPickerError(payload.error ?? '선택한 Google Docs를 동기화하지 못했습니다.') }
+        else setPickerError('Google Docs 파일을 프로젝트에 연결했습니다.')
       }).build()
       picker.setVisible(true)
-    } catch { return }
+    } catch (error) { setPickerError(error instanceof Error ? error.message : 'Google Picker를 열지 못했습니다.') }
   }
 
   async function sendMessage() { if (!message.trim()) return; const nextEvent = { name: '나', time: '방금', text: message, avatar: '나' }; setEvents((items) => [...items, nextEvent]); if (projectId) await getSupabase().from('project_events').insert({ project_id: projectId, actor_name: '나', actor_type: 'human', body: message }); setMessage('') }
@@ -122,6 +126,7 @@ export default function Page() {
   return <main className="th-app min-h-screen text-[#172033]">
     <Header onIntegrations={() => setOnboardingOpen(true)} connectedTools={connectedTools} />
     {onboardingOpen && <OnboardingModal connectedTools={connectedTools} setConnectedTools={setConnectedTools} onClose={() => setOnboardingOpen(false)} />}
+    {pickerError && <div role="status" className="mx-auto mt-3 flex max-w-[1480px] items-center justify-between rounded-lg border border-[#cbdaf7] bg-[#f4f7ff] px-4 py-3 text-xs text-[#31548f]"><span>{pickerError}</span><button aria-label="오류 닫기" onClick={() => setPickerError(null)} className="ml-4 text-[#6b7da4]">닫기</button></div>}
     <div className="th-shell mx-auto max-w-[1480px] px-5 pt-6">
       <div className="mb-6 flex items-end justify-between border-b border-[#e1e6ed] pb-4"><div><div className="mb-2 flex items-center gap-2 text-[10px] font-medium tracking-[0.04em] text-[#7a8494]"><span>프로젝트</span><ChevronRight className="size-3" /><span>Workspace</span></div><h1 className="text-[24px] font-semibold tracking-[-0.04em] text-[#111a2b]">프로젝트 Workspace</h1></div><div className="flex items-center gap-2 text-xs text-[#7a8494]"><span className="size-2 rounded-full bg-[#43b581]" /> 모든 변경사항이 동기화됨 <MoreHorizontal className="ml-2 size-4" /></div></div>
       <div className={`grid items-stretch justify-center gap-5 lg:gap-0 ${toolOpen === 'Claude' ? 'lg:grid-cols-[minmax(260px,0.82fr)_minmax(330px,0.95fr)_minmax(420px,1.35fr)]' : 'lg:grid-cols-[minmax(300px,1fr)_minmax(360px,430px)_minmax(320px,1fr)]'}`}>
@@ -146,7 +151,7 @@ function OnboardingModal({ connectedTools, setConnectedTools, onClose }: { conne
     { name: 'GitHub', mark: 'GH', category: 'agency', copy: '저장소와 PR 변경사항 확인', permissions: ['PR·이슈 읽기', '브랜치 작업'] },
     { name: 'Figma', mark: 'F', category: 'agency', copy: '디자인 시안과 코멘트 확인', permissions: ['파일·코멘트 읽기', '코멘트 작성'] },
     { name: 'Asana', mark: 'A', category: 'agency', copy: '대행사 업무와 마감일 관리', permissions: ['태스크 읽기', '태스크 수정'] },
-    { name: 'Monday.com', mark: 'M', category: 'agency', copy: '여러 클라이언트 보드 통합 관리', permissions: ['보드 읽기', '항목 수정'] },
+    { name: 'Monday.com', mark: 'M', category: 'agency', copy: '여러 클라이언트 보드 통합 ��리', permissions: ['보드 읽기', '항목 수정'] },
     { name: '기타 MCP 서버', mark: '⌁', category: 'custom', copy: '커스텀 URL로 MCP 도구 연결', permissions: ['도구 목록 확인', '요청별 권한 승인'] },
   ]
   useEffect(() => {
@@ -182,7 +187,7 @@ function OnboardingModal({ connectedTools, setConnectedTools, onClose }: { conne
 
 function Header({ onIntegrations, connectedTools }: { onIntegrations: () => void; connectedTools: string[] }) { return <header className="sticky top-0 z-20 flex h-[58px] items-center justify-between border-b border-[#e7e9ee] bg-white/95 px-6 backdrop-blur"><div className="flex items-center gap-5"><div className="flex items-center border-r border-[#e5e8ed] pr-5"><img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/threvix-logo-light-Hn1eP3Wq8zUKqKl9gmM4auBSyIKtG9.png" alt="threvix" className="h-7 w-auto object-contain" /></div><button className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium"><span className="size-2 rounded-full bg-[#2563eb]" /> A사 2026 브랜드 컨퍼런스 <ChevronRight className="size-3.5 text-[#98a1b2]" /></button></div><div className="flex items-center gap-3"><div className="flex -space-x-2">{['수','지','서','+'].map((x, i) => <div key={x} className={`flex size-8 items-center justify-center rounded-full border-2 border-white text-[11px] font-semibold ${i === 3 ? 'bg-[#eef2f7] text-[#667085]' : 'bg-[#e4efff] text-[#2563eb]'}`}>{x}</div>)}</div><Button variant="outline" size="sm" className="h-8 gap-1.5 bg-white text-xs"><Users data-icon="inline-start" /> 팀원 초대</Button><Button onClick={onIntegrations} variant="outline" size="sm" className="h-8 gap-1.5 bg-white text-xs"><Link2 data-icon="inline-start" /> Integrations <span className="ml-0.5 rounded-full bg-[#eaf1ff] px-1.5 text-[10px] text-[#2563eb]">{connectedTools.length}</span></Button><Button variant="ghost" size="icon" className="size-8"><Settings2 /></Button></div></header> }
 
-function AssetCard({ asset, active, onClick }: { asset: Asset; active: boolean; onClick: () => void }) { const Icon = asset.icon; const isSheet = asset.name === '참가자 명단'; const isMail = asset.name === '초청 메일'; return <button onClick={onClick} className={`w-full rounded-lg border p-3 text-left transition ${active ? 'border-[#8eb2fa] bg-[#f1f6ff] shadow-[0_0_0_3px_#e7efff]' : 'border-[#e7eaee] bg-white hover:border-[#b9c7db]'}`}><div className="flex items-start justify-between"><div className={`flex size-8 items-center justify-center rounded-md ${asset.tone === 'blue' ? 'bg-[#eaf1ff] text-[#2563eb]' : asset.tone === 'green' ? 'bg-[#e9f8ef] text-[#26945b]' : asset.tone === 'violet' ? 'bg-[#f1ecff] text-[#7955c7]' : 'bg-[#fff5df] text-[#c37c16]'}`}><Icon className="size-4" /></div><span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${asset.status === '최신' ? 'bg-[#e9f8ef] text-[#278a56]' : asset.status === '검토 필요' ? 'bg-[#fff2dc] text-[#b66a00]' : 'bg-[#eaf1ff] text-[#2563eb]'}`}>{asset.status}</span></div><div className="mt-3 text-xs font-semibold">{asset.name}</div><div className="mt-1 flex items-center justify-between text-[10px] text-[#8d96a4]"><span>{asset.type}</span><span>{asset.version}</span></div><div className="mt-2 overflow-hidden rounded border border-[#e8edf5] bg-[#fbfcfe] p-2 text-[9px] leading-4 text-[#718096]">{isSheet ? <><div className="grid grid-cols-3 gap-1 border-b pb-1 font-semibold text-[#26945b]"><span>이름</span><span>구분</span><span>상태</span></div><div className="grid grid-cols-3 gap-1"><span>김수현</span><span>VIP</span><span>확정</span></div><div className="grid grid-cols-3 gap-1"><span>이준호</span><span>일반</span><span>확정</span></div></> : isMail ? <><div className="font-semibold text-[#4f5b6d]">초청 메일 · 행사 안내</div><div>안녕하세요, A사 브랜드 행사에 초대합니다.</div><div className="text-[#2563eb]">일시 15:00 · 장소 ECC B4</div></> : <><div className="mb-1 h-1 w-2/3 rounded bg-[#cbd5e1]" /><div className="h-1 w-full rounded bg-[#e2e8f0]" /><div className="mt-1 h-1 w-4/5 rounded bg-[#e2e8f0]" /><div className="mt-2 text-[#2563eb]">{asset.detail}</div></>}</div><div className="mt-2 flex items-center gap-1 text-[10px] font-medium text-[#667085]"><Link2 className="size-3" /> {asset.source}</div><div className="mt-2 border-t border-current/10 pt-2 text-[10px] text-[#7b8798]"><span className="font-semibold text-[#2563eb]">{asset.relation}</span> · {asset.detail} · {asset.name === '행사 운영안' ? 'Claude · 방금' : '김수현 · 오늘'}</div></button> }
+function AssetCard({ asset, active, onClick }: { asset: Asset; active: boolean; onClick: () => void }) { const Icon = asset.icon; const isSheet = asset.name === '참가자 명단'; const isMail = asset.name === '초청 메일'; return <button onClick={onClick} className={`w-full rounded-lg border p-3 text-left transition ${active ? 'border-[#8eb2fa] bg-[#f1f6ff] shadow-[0_0_0_3px_#e7efff]' : 'border-[#e7eaee] bg-white hover:border-[#b9c7db]'}`}><div className="flex items-start justify-between"><div className={`flex size-8 items-center justify-center rounded-md ${asset.tone === 'blue' ? 'bg-[#eaf1ff] text-[#2563eb]' : asset.tone === 'green' ? 'bg-[#e9f8ef] text-[#26945b]' : asset.tone === 'violet' ? 'bg-[#f1ecff] text-[#7955c7]' : 'bg-[#fff5df] text-[#c37c16]'}`}><Icon className="size-4" /></div><span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${asset.status === '최신' ? 'bg-[#e9f8ef] text-[#278a56]' : asset.status === '검토 필요' ? 'bg-[#fff2dc] text-[#b66a00]' : 'bg-[#eaf1ff] text-[#2563eb]'}`}>{asset.status}</span></div><div className="mt-3 text-xs font-semibold">{asset.name}</div><div className="mt-1 flex items-center justify-between text-[10px] text-[#8d96a4]"><span>{asset.type}</span><span>{asset.version}</span></div><div className="mt-2 overflow-hidden rounded border border-[#e8edf5] bg-[#fbfcfe] p-2 text-[9px] leading-4 text-[#718096]">{isSheet ? <><div className="grid grid-cols-3 gap-1 border-b pb-1 font-semibold text-[#26945b]"><span>이름</span><span>구분</span><span>상태</span></div><div className="grid grid-cols-3 gap-1"><span>김수현</span><span>VIP</span><span>확정</span></div><div className="grid grid-cols-3 gap-1"><span>이준호</span><span>일반</span><span>확정</span></div></> : isMail ? <><div className="font-semibold text-[#4f5b6d]">초청 메일 · 행사 안내</div><div>안녕���세요, A사 브랜드 행사에 초대합니다.</div><div className="text-[#2563eb]">일시 15:00 · 장소 ECC B4</div></> : <><div className="mb-1 h-1 w-2/3 rounded bg-[#cbd5e1]" /><div className="h-1 w-full rounded bg-[#e2e8f0]" /><div className="mt-1 h-1 w-4/5 rounded bg-[#e2e8f0]" /><div className="mt-2 text-[#2563eb]">{asset.detail}</div></>}</div><div className="mt-2 flex items-center gap-1 text-[10px] font-medium text-[#667085]"><Link2 className="size-3" /> {asset.source}</div><div className="mt-2 border-t border-current/10 pt-2 text-[10px] text-[#7b8798]"><span className="font-semibold text-[#2563eb]">{asset.relation}</span> · {asset.detail} · {asset.name === '행사 운영안' ? 'Claude · 방금' : '김수현 · 오늘'}</div></button> }
 
 function PersonEvent({ event }: any) { return <div className="flex gap-3"><div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#e4efff] text-xs font-semibold text-[#2563eb]">{event.avatar}</div><div><div className="flex items-center gap-2"><span className="text-xs font-semibold">{event.name}</span><span className="text-[10px] text-[#9ba3af]">{event.time}</span></div><p className="mt-1 text-[13px] leading-6 text-[#4f5b6d]">{event.text}</p></div></div> }
 

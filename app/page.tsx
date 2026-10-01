@@ -8,15 +8,23 @@ import { ArrowLeft, ArrowRight, Check, ChevronRight, Clock3, FileCheck2, FileTex
 type Asset = { name: string; type: string; source: string; version: string; status: string; relation: string; detail: string; tone: string; icon: typeof FileText }
 
 const brandDomains: Record<string, string> = { 'Google 계정': 'google.com', 'Google Workspace': 'google.com', Slack: 'slack.com', Gmail: 'gmail.com', Claude: 'anthropic.com', Notion: 'notion.so', Linear: 'linear.app', Jira: 'atlassian.com', GitHub: 'github.com', Figma: 'figma.com', Asana: 'asana.com', 'Monday.com': 'monday.com' }
+const brandSlugs: Record<string, string> = { 'Google 계정': 'google', 'Google Workspace': 'google', Slack: 'slack', Gmail: 'gmail', Claude: 'anthropic', Notion: 'notion', Linear: 'linear', Jira: 'jira', GitHub: 'github', Figma: 'figma', Asana: 'asana', 'Monday.com': 'monday' }
 
 function BrandIcon({ name, mark }: { name: string; mark: string }) {
   const [failed, setFailed] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  const slug = brandSlugs[name]
   const domain = brandDomains[name]
   const logoKitToken = process.env.NEXT_PUBLIC_LOGOKIT_TOKEN
-  const logoKitUrl = domain ? `https://img.logokit.com/${domain}${logoKitToken ? `?token=${logoKitToken}&size=64&fallback=monogram` : '?size=64&fallback=monogram'}` : null
+  const simpleIconUrl = slug ? `https://cdn.simpleicons.org/${slug}` : null
+  const logoKitUrl = logoKitToken && domain ? `https://img.logokit.com/${domain}?token=${logoKitToken}&size=64&fallback=monogram` : null
   const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64` : null
-  const src = failed ? faviconUrl : logoKitUrl
-  return <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[#e1e6ed] bg-white"><span className={`text-sm font-bold text-[#2563eb] ${src ? 'hidden' : ''}`}>{mark}</span>{src ? <img src={src} alt={`${name} 로고`} className="block size-6 object-contain" onError={() => setFailed(true)} /> : null}</div>
+  const src = failed ? (logoKitUrl || faviconUrl) : simpleIconUrl
+  const showFallback = () => {
+    setFailed(true)
+    if (!logoKitUrl && !faviconUrl) return
+  }
+  return <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#e1e6ed] bg-white"><span className={`text-xs font-bold text-[#2563eb] ${loaded && src ? 'hidden' : ''}`}>{mark}</span>{src ? <img src={src} alt={`${name} 로고`} className={`size-5 object-contain ${loaded ? 'block' : 'hidden'}`} onLoad={() => setLoaded(true)} onError={(event) => { if (event.currentTarget.src === simpleIconUrl && logoKitUrl) { setLoaded(false); showFallback() } else { setLoaded(false); event.currentTarget.style.display = 'none' } }} /> : null}</div>
 }
 const assets: Asset[] = [
   { name: '행사 운영안', type: '운영 문서', source: 'Google Docs', version: 'v8', status: '수정안 생성됨', relation: '이번 변경 영향', detail: '14:00 → 15:00 반영 필요', tone: 'blue', icon: FileText },

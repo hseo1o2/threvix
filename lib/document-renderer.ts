@@ -7,7 +7,8 @@ export type RenderedPreview = {
   filename: string
 }
 
-const gotenbergUrl = process.env.GOTENBERG_URL
+const configuredGotenbergUrl = process.env.GOTENBERG_URL?.trim()
+const gotenbergUrl = configuredGotenbergUrl?.match(/^\[[^\]]+\]\((https?:\/\/[^)]+)\)$/)?.[1] ?? configuredGotenbergUrl
 
 export async function renderDocxToPdf(file: File): Promise<RenderedPreview> {
   if (!gotenbergUrl) {
@@ -16,8 +17,14 @@ export async function renderDocxToPdf(file: File): Promise<RenderedPreview> {
 
   const form = new FormData()
   form.append('files', file, file.name)
+  const username = process.env.GOTENBERG_USERNAME
+  const password = process.env.GOTENBERG_PASSWORD
+  const headers = username && password
+    ? { Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}` }
+    : undefined
   const response = await fetch(`${gotenbergUrl.replace(/\/$/, '')}/forms/libreoffice/convert`, {
     method: 'POST',
+    headers,
     body: form,
     signal: AbortSignal.timeout(60_000),
   })

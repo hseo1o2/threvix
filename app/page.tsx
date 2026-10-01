@@ -53,20 +53,17 @@ export default function Page() {
   }, [])
 
   async function sendMessage() { if (!message.trim()) return; const nextEvent = { name: '나', time: '방금', text: message, avatar: '나' }; setEvents((items) => [...items, nextEvent]); if (projectId) await getSupabase().from('project_events').insert({ project_id: projectId, actor_name: '나', actor_type: 'human', body: message }); setMessage('') }
-  function runClaudeAction() {
+  async function runClaudeAction() {
+    if (!projectId) return
     setToolRunning(true)
-    window.setTimeout(() => {
-      setToolRunning(false)
-      setToolApplied(true)
-      const agentEvent = { name: 'Claude', time: '방금', text: '행사 운영안에 수정안을 생성했습니다. 14:00 → 15:00', avatar: 'C' }
-      setEvents((items) => [...items, agentEvent])
-      if (projectId) {
-        Promise.all([
-          getSupabase().from('project_events').insert({ project_id: projectId, actor_name: 'Claude', actor_type: 'agent', body: agentEvent.text }),
-          getSupabase().from('patches').insert({ project_id: projectId, title: '행사 운영 일정 수정안', source_text: 'Slack #client-a', previous_value: '14:00 – 17:00', proposed_value: '15:00 – 18:00' }),
-        ])
-      }
-    }, 850)
+    const response = await fetch('/api/agent/propose', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId, sourceRequest: '행사 시작 시간을 14:00에서 15:00로 변경해주세요.' }) })
+    const payload = await response.json()
+    setToolRunning(false)
+    if (!response.ok) return
+    setToolApplied(true)
+    const agentEvent = { name: 'Threvix Agent', time: '방금', text: `${payload.proposal.title}: ${payload.proposal.summary}`, avatar: 'T' }
+    setEvents((items) => [...items, agentEvent])
+    await getSupabase().from('project_events').insert({ project_id: projectId, actor_name: 'Threvix Agent', actor_type: 'agent', body: agentEvent.text })
   }
 
   if (screen === 'pr') return <PullRequest approved={approved} setApproved={setApproved} onBack={() => setScreen('workspace')} />

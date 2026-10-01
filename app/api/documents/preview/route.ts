@@ -12,7 +12,7 @@ async function renderFile(filePath: string) {
 export async function GET(request: Request) {
   const variant = new URL(request.url).searchParams.get('variant') === 'proposed' ? 'proposed' : 'original'
   const filename = variant === 'proposed' ? 'UNIS-U-KATHON-2025-proposed.docx' : 'UNIS-U-KATHON-2025-d5b088.docx'
-  const filePath = path.join(process.cwd(), 'data', variant === 'proposed' ? 'UNIS-U-KATHON-2025-d5b088.docx' : filename)
+  const filePath = path.join(process.cwd(), 'data', variant === 'proposed' ? 'UNIS-U-KATHON-2025-proposed.docx' : filename)
 
   try {
     const preview = await renderFile(filePath)

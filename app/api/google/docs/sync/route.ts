@@ -2,7 +2,7 @@ import { getToken, UserAuthorizationRequiredError } from '@vercel/connect'
 import { createClient } from '@/lib/supabase/server'
 
 const CONNECTOR = 'google/threvix-google-workspace'
-const SCOPES = ['https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/documents']
+const SCOPES = ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/drive.file']
 
 export async function POST(request: Request) {
   const supabase = await createClient()

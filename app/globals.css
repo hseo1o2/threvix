@@ -188,21 +188,45 @@
 
 @layer components {
   .th-app {
-    background: #f8f9fb;
+    background:
+      radial-gradient(circle at 50% -10%, rgba(255,255,255,0.98), transparent 42%),
+      #f5f7fa;
+    color: #172033;
     letter-spacing: -0.012em;
+    -webkit-font-smoothing: antialiased;
   }
   .th-shell {
-    background-image: linear-gradient(to bottom, rgba(255,255,255,0.72), transparent 280px);
+    background-image: linear-gradient(to bottom, rgba(255,255,255,0.8), transparent 300px);
   }
   .th-panel {
-    border-color: #e6e9ee;
+    border-color: #e1e6ed;
     box-shadow: 0 1px 2px rgba(24, 32, 48, 0.025);
   }
   .th-panel:hover {
-    border-color: #d8dee8;
+    border-color: #d5dce7;
   }
   .th-app button {
-    transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+    transition: border-color 160ms cubic-bezier(0.23, 1, 0.32, 1), background-color 160ms cubic-bezier(0.23, 1, 0.32, 1), color 160ms cubic-bezier(0.23, 1, 0.32, 1), transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .th-app button:active {
+    transform: scale(0.985);
+  }
+  .th-app button:focus-visible,
+  .th-app textarea:focus-visible {
+    outline: 2px solid #7da6f4;
+    outline-offset: 2px;
+  }
+  .th-app ::selection {
+    background: #dbe8ff;
+    color: #17336f;
+  }
+  .th-app ::-webkit-scrollbar {
+    width: 8px;
+  }
+  .th-app ::-webkit-scrollbar-thumb {
+    background: #cbd4e1;
+    border: 2px solid #f5f7fa;
+    border-radius: 999px;
   }
 }
 

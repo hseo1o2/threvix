@@ -12,8 +12,9 @@ const brandDomains: Record<string, string> = { 'Google 계정': 'google.com', Sl
 function BrandIcon({ name, mark }: { name: string; mark: string }) {
   const domain = brandDomains[name]
   const logoKitToken = process.env.NEXT_PUBLIC_LOGOKIT_TOKEN
-  const src = logoKitToken && domain ? `https://img.logokit.com/${domain}?token=${logoKitToken}&size=64&fallback=monogram` : domain ? `https://cdn.jsdelivr.net/gh/creatorem/icons-api@main/api/v1/all/simple-icons/${name.toLowerCase().replace(/[^a-z0-9]+/g, '')}.svg` : null
-  return <div className="flex size-9 items-center justify-center rounded-lg border border-[#e5e8ed] bg-white p-2">{src ? <img src={src} alt={`${name} 로고`} className="size-full object-contain" onError={(event) => { event.currentTarget.style.display = 'none'; event.currentTarget.nextElementSibling?.classList.remove('hidden') }} /> : null}<span className={src ? 'hidden text-sm font-bold text-[#2563eb]' : 'text-sm font-bold text-[#2563eb]'}>{mark}</span></div>
+  const logoKitUrl = domain ? `https://img.logokit.com/${domain}${logoKitToken ? `?token=${logoKitToken}&size=64&fallback=monogram` : '?size=64&fallback=monogram'}` : null
+  const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64` : null
+  return <div className="relative flex size-9 items-center justify-center overflow-hidden rounded-lg border border-[#e5e8ed] bg-white p-2"><span className="text-sm font-bold text-[#2563eb]">{mark}</span>{logoKitUrl ? <img src={logoKitUrl} alt={`${name} 로고`} className="absolute inset-2 size-5 object-contain" onError={(event) => { if (faviconUrl && event.currentTarget.src !== faviconUrl) event.currentTarget.src = faviconUrl; else event.currentTarget.style.display = 'none' }} /> : null}</div>
 }
 const assets: Asset[] = [
   { name: '행사 운영안', type: '운영 문서', source: 'Google Docs', version: 'v8', status: '수정안 생성됨', relation: '이번 변경 영향', detail: '14:00 → 15:00 반영 필요', tone: 'blue', icon: FileText },

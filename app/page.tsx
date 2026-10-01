@@ -5,6 +5,10 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, ArrowRight, Check, ChevronRight, Clock3, FileCheck2, FileText, GitPullRequest, History, Link2, Mail, MessageSquare, MoreHorizontal, Paperclip, Plus, Search, Send, Settings2, ShieldCheck, Sparkles, Users, X } from 'lucide-react'
 
+declare global {
+  interface Window { gapi: { load: (name: string, options: { callback: () => void }) => void }; google: { picker: any } }
+}
+
 type Asset = { name: string; type: string; source: string; version: string; status: string; relation: string; detail: string; tone: string; icon: typeof FileText }
 
 const brandDomains: Record<string, string> = { 'Google 계정': 'google.com', 'Google Workspace': 'google.com', Slack: 'slack.com', Gmail: 'gmail.com', Claude: 'anthropic.com', Notion: 'notion.so', Linear: 'linear.app', Jira: 'atlassian.com', GitHub: 'github.com', Figma: 'figma.com', Asana: 'asana.com', 'Monday.com': 'monday.com' }
@@ -74,9 +78,29 @@ export default function Page() {
 
   async function syncGoogleDoc() {
     if (!projectId) return
-    const selectedFile = window.prompt('Google Picker에서 선택한 Docs 파일 ID를 입력하세요.')
-    if (!selectedFile?.trim()) return
-    await fetch('/api/google/docs/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId, documentId: selectedFile.trim() }) })
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_PICKER_API_KEY
+    const appId = process.env.NEXT_PUBLIC_GOOGLE_CLOUD_PROJECT_NUMBER
+    if (!apiKey || !appId) return
+    const tokenResponse = await fetch('/api/google/picker-token')
+    const tokenPayload = await tokenResponse.json()
+    if (!tokenResponse.ok || !tokenPayload.accessToken) return
+    const loadPicker = () => new Promise<void>((resolve, reject) => {
+      if (window.google?.picker) return resolve()
+      const script = document.createElement('script')
+      script.src = 'https://apis.google.com/js/api.js'
+      script.onload = () => window.gapi.load('picker', { callback: resolve })
+      script.onerror = () => reject(new Error('Google Picker를 불러오지 못했습니다.'))
+      document.head.appendChild(script)
+    })
+    try {
+      await loadPicker()
+      const view = new window.google.picker.DocsView(window.google.picker.ViewId.DOCUMENTS).setMimeTypes('application/vnd.google-apps.document').setSelectFolderEnabled(false)
+      const picker = new window.google.picker.PickerBuilder().setAppId(appId).setDeveloperKey(apiKey).setOAuthToken(tokenPayload.accessToken).addView(view).enableFeature(window.google.picker.Feature.NAV_HIDDEN).setCallback(async (data: { action: string; docs?: Array<{ id: string }> }) => {
+        if (data.action !== window.google.picker.Action.PICKED || !data.docs?.[0]?.id) return
+        await fetch('/api/google/docs/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId, documentId: data.docs[0].id }) })
+      }).build()
+      picker.setVisible(true)
+    } catch { return }
   }
 
   async function sendMessage() { if (!message.trim()) return; const nextEvent = { name: '나', time: '방금', text: message, avatar: '나' }; setEvents((items) => [...items, nextEvent]); if (projectId) await getSupabase().from('project_events').insert({ project_id: projectId, actor_name: '나', actor_type: 'human', body: message }); setMessage('') }

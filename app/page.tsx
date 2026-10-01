@@ -53,7 +53,7 @@ export default function Page() {
   async function sendMessage() { if (!message.trim()) return; const nextEvent = { name: '나', time: '방금', text: message, avatar: '나' }; setEvents((items) => [...items, nextEvent]); if (projectId) await getSupabase().from('project_events').insert({ project_id: projectId, actor_name: '나', actor_type: 'human', body: message }); setMessage('') }
   function runClaudeAction() {
     setToolRunning(true)
-    window.setTimeout(async () => {
+    window.setTimeout(() => {
       setToolRunning(false)
       setToolApplied(true)
       const agentEvent = { name: 'Claude', time: '방금', text: '행사 운영안에 수정안을 생성했습니다. 14:00 → 15:00', avatar: 'C' }

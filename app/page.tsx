@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, ArrowRight, Check, ChevronRight, Clock3, FileCheck2, FileText, GitPullRequest, History, Link2, Mail, MessageSquare, MoreHorizontal, Paperclip, Plus, Search, Send, Settings2, ShieldCheck, Sparkles, Users, X } from 'lucide-react'
 
@@ -29,14 +30,35 @@ export default function Page() {
   const [toolOpen, setToolOpen] = useState<string | null>(null)
   const [toolApplied, setToolApplied] = useState(false)
   const [toolRunning, setToolRunning] = useState(false)
+  const [projectId, setProjectId] = useState<string | null>(null)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const getSupabase = () => createClient()
 
-  function sendMessage() { if (!message.trim()) return; setEvents((items) => [...items, { name: '나', time: '방금', text: message, avatar: '나' }]); setMessage('') }
+  useEffect(() => {
+    let active = true
+    async function loadWorkspace() {
+      const { data: { user } } = await getSupabase().auth.getUser()
+      if (!active) return
+      setUserEmail(user?.email ?? null)
+      if (!user) return
+      const { data: existing } = await getSupabase().from('projects').select('id').order('created_at', { ascending: true }).limit(1).maybeSingle()
+      if (existing) { setProjectId(existing.id); return }
+      const { data: created } = await getSupabase().from('projects').insert({ name: 'Client A · Event Launch', client_name: 'A사', created_by: user.id }).select('id').single()
+      if (created) setProjectId(created.id)
+    }
+    loadWorkspace()
+    return () => { active = false }
+  }, [])
+
+  async function sendMessage() { if (!message.trim()) return; const nextEvent = { name: '나', time: '방금', text: message, avatar: '나' }; setEvents((items) => [...items, nextEvent]); if (projectId) await getSupabase().from('project_events').insert({ project_id: projectId, actor_name: '나', actor_type: 'human', body: message }); setMessage('') }
   function runClaudeAction() {
     setToolRunning(true)
-    window.setTimeout(() => {
+    window.setTimeout(async () => {
       setToolRunning(false)
       setToolApplied(true)
-      setEvents((items) => [...items, { name: 'Claude', time: '방금', text: '행사 운영안에 수정안을 생성했습니다. 14:00 → 15:00', avatar: 'C' }])
+      const agentEvent = { name: 'Claude', time: '방금', text: '행사 운영안에 수정안을 생성했습니다. 14:00 → 15:00', avatar: 'C' }
+      setEvents((items) => [...items, agentEvent])
+      if (projectId) await getSupabase().from('project_events').insert({ project_id: projectId, actor_name: 'Claude', actor_type: 'agent', body: agentEvent.text }); if (projectId) await getSupabase().from('patches').insert({ project_id: projectId, title: '행사 운영 일정 수정안', source_text: 'Slack #client-a', previous_value: '14:00 – 17:00', proposed_value: '15:00 – 18:00' })
     }, 850)
   }
 

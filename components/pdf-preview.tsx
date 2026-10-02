@@ -1,18 +1,29 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy } from 'pdfjs-dist'
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
 
 GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@6.3.289/build/pdf.worker.min.mjs'
 
-export function PdfPreview({ variant, title }: { variant: 'original' | 'proposed'; title: string }) {
-  const containerRef = useRef<HTMLDivElement>(null)
+type PreviewProps = { variant: 'original' | 'proposed'; title: string }
+
+export function PdfPreview({ variant, title }: PreviewProps) {
+  const hostRef = useRef<HTMLDivElement>(null)
   const [status, setStatus] = useState('문서 렌더링 중…')
   const [pageCount, setPageCount] = useState(0)
+
   useEffect(() => {
     let cancelled = false
-    let pdf: PDFDocumentProxy | undefined
+    let loadingTask: ReturnType<typeof getDocument> | undefined
+    let renderTasks: Array<{ cancel?: () => void }> = []
+    const host = hostRef.current
+
     async function render() {
+      if (!host) return
+      host.replaceChildren()
+      setStatus('문서 렌더링 중…')
+      setPageCount(0)
+
       try {
         let response: Response | undefined
         for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -21,12 +32,14 @@ export function PdfPreview({ variant, title }: { variant: 'original' | 'proposed
           if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)))
         }
         if (!response?.ok) throw new Error('PDF preview request failed after retries')
-        pdf = await getDocument({ data: await response.arrayBuffer() }).promise
-        if (cancelled || !containerRef.current) return
-        const container = containerRef.current
-        container.replaceChildren()
+
+        loadingTask = getDocument({ data: await response.arrayBuffer() })
+        const pdf = await loadingTask.promise
+        if (cancelled) return
+
         const ratio = window.devicePixelRatio || 1
         for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+          if (cancelled) return
           const page = await pdf.getPage(pageNumber)
           const base = page.getViewport({ scale: 1 })
           const scale = Math.min(1.35, 680 / base.width)
@@ -40,14 +53,37 @@ export function PdfPreview({ variant, title }: { variant: 'original' | 'proposed
           canvas.style.width = `${viewport.width}px`
           canvas.style.height = `${viewport.height}px`
           paper.appendChild(canvas)
-          container.appendChild(paper)
-          await page.render({ canvas, viewport, transform: ratio !== 1 ? [ratio, 0, 0, ratio, 0, 0] : undefined }).promise
+          host.appendChild(paper)
+          const renderTask = page.render({ canvas, viewport, transform: ratio !== 1 ? [ratio, 0, 0, ratio, 0, 0] : undefined })
+          renderTasks.push(renderTask)
+          await renderTask.promise
         }
-        if (!cancelled) { setPageCount(pdf.numPages); setStatus('') }
-      } catch (error) { if (!cancelled) setStatus(error instanceof Error ? `PDF 미리보기 오류: ${error.message}` : 'PDF 미리보기를 불러오지 못했습니다.') }
+
+        if (!cancelled) {
+          setPageCount(pdf.numPages)
+          setStatus('')
+        }
+      } catch (error) {
+        if (!cancelled && error instanceof Error && error.name !== 'RenderingCancelledException') {
+          setStatus(`PDF 미리보기 오류: ${error.message}`)
+        }
+      }
     }
-    render()
-    return () => { cancelled = true; pdf?.destroy() }
+
+    void render()
+    return () => {
+      cancelled = true
+      renderTasks.forEach((task) => task.cancel?.())
+      loadingTask?.destroy?.()
+      host?.replaceChildren()
+    }
   }, [variant, title])
-  return <div className="relative min-h-[720px] bg-[#eef0f3] p-4"><div ref={containerRef} aria-label={title} className="min-h-[680px]">{status && <div className="absolute inset-0 z-10 grid place-items-center bg-[#eef0f3]/95 px-4 text-center text-xs text-[#667085]">{status}</div>}</div>{!status && <div className="sticky bottom-3 mx-auto mt-2 w-fit rounded-full border border-[#dfe3e8] bg-white/95 px-3 py-1 text-[10px] text-[#667085] shadow-sm">{pageCount}페이지 · 세로 스크롤</div>}</div>
+
+  return (
+    <div className="relative min-h-[720px] bg-[#eef0f3] p-4">
+      <div ref={hostRef} aria-label={title} className="min-h-[680px]" />
+      {status && <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-[#eef0f3]/95 px-4 text-center text-xs text-[#667085]">{status}</div>}
+      {!status && <div className="sticky bottom-3 mx-auto mt-2 w-fit rounded-full border border-[#dfe3e8] bg-white/95 px-3 py-1 text-[10px] text-[#667085] shadow-sm">{pageCount}페이지 · 세로 스크롤</div>}
+    </div>
+  )
 }

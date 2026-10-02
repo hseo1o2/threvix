@@ -27,7 +27,7 @@ export function PdfPreview({ variant, title }: PreviewProps) {
       try {
         let response: Response | undefined
         for (let attempt = 0; attempt < 3; attempt += 1) {
-          response = await fetch(`/api/documents/preview?variant=${variant}`, { cache: 'no-store' })
+          response = await fetch(`/api/documents/preview?variant=${variant}`, { cache: 'force-cache' })
           if (response.ok) break
           if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 2500 * (attempt + 1)))
         }

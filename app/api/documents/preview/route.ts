@@ -3,6 +3,7 @@ import path from 'node:path'
 import { renderDocxToPdf } from '@/lib/document-renderer'
 
 export const runtime = 'nodejs'
+export const maxDuration = 300
 
 async function renderFile(filePath: string) {
   const bytes = await readFile(filePath)

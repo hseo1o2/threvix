@@ -29,9 +29,16 @@ export function PdfPreview({ variant, title }: PreviewProps) {
         for (let attempt = 0; attempt < 3; attempt += 1) {
           response = await fetch(`/api/documents/preview?variant=${variant}`, { cache: 'no-store' })
           if (response.ok) break
-          if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)))
+          if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 2500 * (attempt + 1)))
         }
-        if (!response?.ok) throw new Error('PDF preview request failed after retries')
+        if (!response?.ok) {
+          let detail = `HTTP ${response?.status ?? 'unknown'}`
+          try {
+            const body = await response?.json()
+            if (body?.error) detail = body.error
+          } catch { /* keep the HTTP status when the server returned non-JSON */ }
+          throw new Error(`PDF preview request failed: ${detail}`)
+        }
 
         loadingTask = getDocument({ data: await response.arrayBuffer() })
         const pdf = await loadingTask.promise

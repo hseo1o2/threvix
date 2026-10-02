@@ -22,15 +22,23 @@ export async function renderDocxToPdf(file: File): Promise<RenderedPreview> {
   const headers = username && password
     ? { Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}` }
     : undefined
-  const response = await fetch(`${gotenbergUrl.replace(/\/$/, '')}/forms/libreoffice/convert`, {
-    method: 'POST',
-    headers,
-    body: form,
-    signal: AbortSignal.timeout(60_000),
-  })
+  let response: Response | undefined
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const requestForm = new FormData()
+    requestForm.append('files', file, file.name)
+    response = await fetch(`${gotenbergUrl.replace(/\/$/, '')}/forms/libreoffice/convert`, {
+      method: 'POST',
+      headers,
+      body: requestForm,
+      signal: AbortSignal.timeout(90_000),
+    })
+    if (response.ok) break
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 2000 * (attempt + 1)))
+  }
 
-  if (!response.ok) {
-    throw new Error(`Gotenberg conversion failed (${response.status})`)
+  if (!response?.ok) {
+    const detail = response ? (await response.text()).slice(0, 240) : 'no response'
+    throw new Error(`Gotenberg conversion failed (${response?.status ?? 'unknown'}): ${detail}`)
   }
 
   return {

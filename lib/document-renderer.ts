@@ -8,7 +8,8 @@ export type RenderedPreview = {
 }
 
 const configuredGotenbergUrl = process.env.GOTENBERG_URL?.trim()
-const gotenbergUrl = configuredGotenbergUrl?.match(/^\[[^\]]+\]\((https?:\/\/[^)]+)\)$/)?.[1] ?? configuredGotenbergUrl
+const parsedGotenbergUrl = configuredGotenbergUrl?.match(/^\[[^\]]+\]\((https:\/\/[^)]+)\)$/)?.[1] ?? configuredGotenbergUrl
+const gotenbergUrl = parsedGotenbergUrl && /^https:\/\/[^/]+(?::\d+)?$/.test(parsedGotenbergUrl) ? parsedGotenbergUrl : undefined
 
 export async function renderDocxToPdf(file: File): Promise<RenderedPreview> {
   if (!gotenbergUrl) {

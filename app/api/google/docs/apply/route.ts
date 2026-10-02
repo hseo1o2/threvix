@@ -10,10 +10,12 @@ export async function POST(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return Response.json({ error: '로그인이 필요합니다.' }, { status: 401 })
-  const body = await request.json() as Partial<RequestBody>
-  if (!body.projectId || !body.documentId || !body.replacement || typeof body.startIndex !== 'number' || typeof body.endIndex !== 'number' || body.startIndex >= body.endIndex) return Response.json({ error: '유효하지 않은 변경 요청입니다.' }, { status: 400 })
+  const body = await request.json().catch(() => null) as Partial<RequestBody> | null
+  if (!body || typeof body.projectId !== 'string' || typeof body.documentId !== 'string' || typeof body.replacement !== 'string' || !body.replacement.trim() || body.replacement.length > 100_000 || !Number.isSafeInteger(body.startIndex) || !Number.isSafeInteger(body.endIndex) || body.startIndex < 1 || body.endIndex <= body.startIndex) return Response.json({ error: '유효하지 않은 변경 요청입니다.' }, { status: 400 })
   const { data: project } = await supabase.from('projects').select('id').eq('id', body.projectId).eq('created_by', user.id).maybeSingle()
   if (!project) return Response.json({ error: '프로젝트 권한이 없습니다.' }, { status: 403 })
+  const { data: asset } = await supabase.from('doc_assets').select('external_id').eq('project_id', body.projectId).eq('external_id', body.documentId).maybeSingle()
+  if (!asset) return Response.json({ error: '프로젝트에 연결된 문서만 변경할 수 있습니다.' }, { status: 403 })
   try {
     const token = await getTokenResponse(CONNECTOR, { subject: { type: 'user', id: user.id }, scopes: SCOPES })
     const response = await fetch(`https://docs.googleapis.com/v1/documents/${encodeURIComponent(body.documentId)}:batchUpdate`, { method: 'POST', headers: { authorization: `Bearer ${token.access_token}`, 'content-type': 'application/json' }, body: JSON.stringify({ requests: [{ deleteContentRange: { range: { startIndex: body.startIndex, endIndex: body.endIndex } } }, { insertText: { location: { index: body.startIndex }, text: body.replacement } }] }) })

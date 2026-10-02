@@ -58,18 +58,24 @@ export function PdfPreview({ variant, title, highlights = [] }: PreviewProps) {
           const renderTask = page.render({ canvas, viewport, transform: ratio !== 1 ? [ratio, 0, 0, ratio, 0, 0] : undefined })
           renderTasks.push(renderTask)
           await renderTask.promise
-          if (highlights.length && pageNumber === 1) {
+          if (highlights.length) {
             const text = await page.getTextContent()
             for (const item of text.items) {
-              if (!('str' in item) || !highlights.some((value) => item.str.includes(value))) continue
+              if (!('str' in item)) continue
+              const normalizedItem = item.str.replace(/\s+/g, ' ').trim()
+              const matches = highlights.some((value) => {
+                const normalizedValue = value.replace(/\s+/g, ' ').trim()
+                return normalizedItem.includes(normalizedValue) || normalizedValue.split(/\s+/).some((part) => part.length > 2 && normalizedItem.includes(part))
+              })
+              if (!matches) continue
+              const [, , , fontHeight, x, y] = item.transform
+              const [left, top, right, bottom] = viewport.convertToViewportRectangle([x, y, x + item.width, y + Math.abs(fontHeight)])
               const marker = document.createElement('div')
               marker.className = 'pointer-events-none absolute rounded bg-[#ffe066]/70 ring-1 ring-[#e2ad00]/50'
-              const [, , , fontHeight, x, y] = item.transform
-              const top = viewport.height - y - Math.abs(fontHeight)
-              marker.style.left = `${x * scale}px`
-              marker.style.top = `${top * scale}px`
-              marker.style.width = `${Math.max(item.width * scale, 24)}px`
-              marker.style.height = `${Math.abs(fontHeight) * scale + 4}px`
+              marker.style.left = `${Math.min(left, right) - 2}px`
+              marker.style.top = `${Math.min(top, bottom) - 2}px`
+              marker.style.width = `${Math.max(Math.abs(right - left) + 4, 24)}px`
+              marker.style.height = `${Math.max(Math.abs(bottom - top) + 4, 12)}px`
               paper.appendChild(marker)
             }
           }
@@ -83,5 +89,5 @@ export function PdfPreview({ variant, title, highlights = [] }: PreviewProps) {
     return () => { cancelled = true; renderTasks.forEach((task) => task.cancel?.()); loadingTask?.destroy?.(); host?.replaceChildren() }
   }, [variant, title, highlights])
 
-  return <div className="relative min-h-[720px] bg-[#eef0f3] p-3 sm:p-4"><div ref={hostRef} aria-label={title} className="min-h-[680px] w-full" />{status && <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-[#eef0f3]/95 px-4 text-center text-xs text-[#667085]">{status}</div>}{!status && <div className="sticky bottom-3 mx-auto mt-2 w-fit rounded-full border border-[#dfe3e8] bg-white/95 px-3 py-1 text-[10px] text-[#667085]">{pageCount}페이지 · 세로 스크롤</div>}</div>
+  return <div className="relative h-[min(68vh,760px)] min-h-[420px] overflow-y-auto overscroll-contain bg-[#eef0f3] p-3 sm:p-4"><div ref={hostRef} aria-label={title} className="min-h-[680px] w-full" />{status && <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-[#eef0f3]/95 px-4 text-center text-xs text-[#667085]">{status}</div>}{!status && <div className="sticky bottom-3 mx-auto mt-2 w-fit rounded-full border border-[#dfe3e8] bg-white/95 px-3 py-1 text-[10px] text-[#667085]">{pageCount}페이지 · 세로 스크롤</div>}</div>
 }

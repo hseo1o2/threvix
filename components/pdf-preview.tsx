@@ -69,7 +69,8 @@ export function PdfPreview({ variant, title, highlights = [] }: PreviewProps) {
               })
               if (!matches) continue
               const [, , , fontHeight, x, y] = item.transform
-              const [left, top, right, bottom] = viewport.convertToViewportRectangle([x, y, x + item.width, y + Math.abs(fontHeight)])
+              const [left, top] = viewport.convertToViewportPoint(x, y)
+              const [right, bottom] = viewport.convertToViewportPoint(x + item.width, y + Math.abs(fontHeight))
               const marker = document.createElement('div')
               marker.className = 'pointer-events-none absolute rounded bg-[#ffe066]/70 ring-1 ring-[#e2ad00]/50'
               marker.style.left = `${Math.min(left, right) - 2}px`

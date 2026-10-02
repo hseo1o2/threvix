@@ -11,6 +11,10 @@ const _notoSansKr = V0_Font_Noto_Sans_KR({ subsets: ['korean'], weight: ["400","
 
 export const metadata: Metadata = {
   title: 'Threvix — 프로젝트 상태 관리 레이어',
+  icons: {
+    icon: '/threvix-icon-dark.svg',
+    apple: '/threvix-icon-dark.svg',
+  },
   description: '기존 협업 도구 위에서 프로젝트의 변경사항, 결정, 검토와 버전을 관리하세요.',
   generator: 'v0.app',
   icons: {

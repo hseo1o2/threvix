@@ -2,7 +2,7 @@ import { getToken, UserAuthorizationRequiredError } from '@vercel/connect'
 import { createClient } from '@/lib/supabase/server'
 
 const CONNECTOR = 'google/threvix-google-workspace'
-const SCOPES = ['https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/documents']
+const SCOPES = ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/drive.file']
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -22,12 +22,13 @@ export async function POST(request: Request) {
     ])
     if (!metadataResponse.ok || !documentResponse.ok) return Response.json({ error: '문서 내용을 읽지 못했습니다.' }, { status: 502 })
     const metadata = await metadataResponse.json()
+    if (metadata.id !== documentId || metadata.mimeType !== 'application/vnd.google-apps.document') return Response.json({ error: 'Google Docs 문서만 연결할 수 있습니다.' }, { status: 415 })
     const document = await documentResponse.json()
     const text = (document.body?.content ?? []).flatMap((block: { paragraph?: { elements?: Array<{ textRun?: { content?: string } }> } }) => block.paragraph?.elements?.map((element) => element.textRun?.content ?? '') ?? []).join('')
     const { data: asset, error: assetError } = await supabase.from('doc_assets').upsert({ project_id: projectId, provider: 'google_docs', external_id: metadata.id, name: metadata.name, mime_type: metadata.mimeType, web_url: metadata.webViewLink, current_version: metadata.modifiedTime ?? 'v1', current_text: text, synced_at: new Date().toISOString() }, { onConflict: 'project_id,external_id' }).select('id, name, current_version, current_text, web_url').single()
-    if (assetError) return Response.json({ error: assetError.message }, { status: 500 })
+    if (assetError) return Response.json({ error: '문서 자산을 저장하지 못했습니다.' }, { status: 500 })
     const { error: versionError } = await supabase.from('doc_versions').upsert({ asset_id: asset.id, version: asset.current_version, text_content: text, source: 'google_docs' }, { onConflict: 'asset_id,version' })
-    if (versionError) return Response.json({ error: versionError.message }, { status: 500 })
+    if (versionError) return Response.json({ error: '문서 버전을 저장하지 못했습니다.' }, { status: 500 })
     return Response.json({ asset })
   } catch (error) {
     if (error instanceof UserAuthorizationRequiredError) return Response.json({ error: 'Google 계정 연결이 필요합니다.' }, { status: 401 })

@@ -2,7 +2,7 @@ import { startAuthorization } from '@vercel/connect'
 import { createClient } from '@/lib/supabase/server'
 
 const CONNECTOR = 'google/threvix-google-workspace'
-const GOOGLE_SCOPES = ['https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/documents']
+const GOOGLE_SCOPES = ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/drive.file']
 
 function getOrigin(request: Request) {
   const url = new URL(request.url)
